@@ -1,22 +1,24 @@
+"use client";
+
 import type { ComponentType } from "react";
 import Link from "next/link";
+import { useRef, useState } from "react";
 import {
-  Bell,
   BookOpen,
   BookText,
   ChevronRight,
   Compass,
   FileText,
   Globe,
+  Globe2,
   Layers3,
   Library,
   Lightbulb,
+  Menu,
   MessageCircle,
   Mic,
   Music2,
-  Sparkles,
   Star,
-  Target,
   Users,
   Volume2,
 } from "lucide-react";
@@ -31,17 +33,17 @@ type NavItem = {
 };
 
 const pinyinNav: NavItem[] = [
-  { zh: "声母", mm: "ဗျည်း", icon: Mic, href: "/pinyin/initials", bg: "bg-blue-100/80", iconColor: "text-blue-600" },
-  { zh: "韵母", mm: "သရ", icon: Music2, href: "/pinyin/finals", bg: "bg-emerald-100/80", iconColor: "text-emerald-600" },
-  { zh: "整体", mm: "အသံတွဲ", icon: Layers3, href: "/pinyin/syllables", bg: "bg-purple-100/80", iconColor: "text-purple-600" },
-  { zh: "声调", mm: "အသံ", icon: FileText, href: "/pinyin/tones", bg: "bg-orange-100/80", iconColor: "text-orange-600" },
+  { zh: "声母", mm: "ဗျည်း", icon: Mic, href: "/pinyin/initials", bg: "bg-blue-100", iconColor: "text-blue-600" },
+  { zh: "韵母", mm: "သရ", icon: Music2, href: "/pinyin/finals", bg: "bg-emerald-100", iconColor: "text-emerald-600" },
+  { zh: "整体", mm: "အသံတွဲ", icon: Layers3, href: "/pinyin/syllables", bg: "bg-purple-100", iconColor: "text-purple-600" },
+  { zh: "声调", mm: "အသံ", icon: FileText, href: "/pinyin/tones", bg: "bg-orange-100", iconColor: "text-orange-600" },
 ];
 
 const coreTools: NavItem[] = [
-  { zh: "AI 翻译", mm: "AI ဘာသာပြန်", icon: Globe, href: "/ai-translate", bg: "bg-indigo-100/80", iconColor: "text-indigo-600" },
-  { zh: "免费书籍", mm: "စာကြည့်တိုက်", icon: Library, href: "/library", bg: "bg-cyan-100/80", iconColor: "text-cyan-600" },
-  { zh: "单词收藏", mm: "မှတ်ထားသော စာလုံး", icon: Star, href: "/words", bg: "bg-slate-200/90", iconColor: "text-slate-700" },
-  { zh: "口语收藏", mm: "မှတ်ထားသော စကားပြော", icon: Volume2, href: "/oral", bg: "bg-slate-200/90", iconColor: "text-slate-700" },
+  { zh: "AI 翻译", mm: "AI ဘာသာပြန်", icon: Globe, href: "/ai-translate", bg: "bg-indigo-100", iconColor: "text-indigo-600" },
+  { zh: "免费书籍", mm: "စာကြည့်တိုက်", icon: Library, href: "/library", bg: "bg-cyan-100", iconColor: "text-cyan-600" },
+  { zh: "单词收藏", mm: "မှတ်ထားသော စာလုံး", icon: Star, href: "/words", bg: "bg-slate-200", iconColor: "text-slate-700" },
+  { zh: "口语收藏", mm: "မှတ်ထားသော စကားပြော", icon: Volume2, href: "/oral", bg: "bg-slate-200", iconColor: "text-slate-700" },
 ];
 
 const systemCourses = [
@@ -74,100 +76,126 @@ const systemCourses = [
   },
 ];
 
-const glassCard =
-  "rounded-2xl border border-white/45 bg-white/35 shadow-[0_10px_30px_rgba(2,6,23,0.12)] backdrop-blur-xl";
-const glassCardHover = `${glassCard} transition-all duration-300 hover:bg-white/45 hover:shadow-[0_14px_34px_rgba(2,6,23,0.16)]`;
-
-function TopPanel() {
-  return (
-    <header className="sticky top-0 z-30 mb-3">
-      <div className="relative overflow-hidden rounded-2xl border border-white/50 bg-white/40 px-3 py-3 shadow-[0_10px_28px_rgba(2,6,23,0.12)] backdrop-blur-xl">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-white/35 via-transparent to-white/20" />
-        <div className="relative flex items-center justify-between">
-          <div>
-            <p className="text-[11px] font-semibold tracking-wide text-slate-500">Chinese Learning Hub</p>
-            <h1 className="text-[18px] font-black text-slate-800">中缅文学习中心</h1>
-          </div>
-          <button
-            type="button"
-            aria-label="通知"
-            className="rounded-xl border border-white/50 bg-white/50 p-2 text-slate-600 transition-colors hover:bg-white/70"
-          >
-            <Bell className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="relative mt-2 flex gap-2">
-          <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/15 px-2.5 py-1 text-[10px] font-bold text-indigo-700">
-            <Sparkles className="h-3.5 w-3.5" />
-            今日任务
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
-            <Target className="h-3.5 w-3.5" />
-            30 分钟
-          </span>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-function HeroStrip() {
-  return (
-    <section className={`${glassCard} mb-4 p-4`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-bold tracking-wider text-slate-500">WELCOME BACK</p>
-          <h2 className="mt-1 text-[20px] font-black leading-tight text-slate-800">今天继续进步一点点</h2>
-          <p className="mt-1 text-[12px] text-slate-600">每天稳步学习，拼音、词汇、口语一起提升。</p>
-        </div>
-        <div className="rounded-xl bg-white/60 p-2 text-indigo-600">
-          <Sparkles className="h-5 w-5" />
-        </div>
-      </div>
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <div className="rounded-xl bg-white/50 p-2 text-center">
-          <p className="text-[10px] font-semibold text-slate-500">已学单词</p>
-          <p className="text-[15px] font-black text-slate-800">1,240</p>
-        </div>
-        <div className="rounded-xl bg-white/50 p-2 text-center">
-          <p className="text-[10px] font-semibold text-slate-500">连续学习</p>
-          <p className="text-[15px] font-black text-slate-800">18 天</p>
-        </div>
-        <div className="rounded-xl bg-white/50 p-2 text-center">
-          <p className="text-[10px] font-semibold text-slate-500">今日进度</p>
-          <p className="text-[15px] font-black text-slate-800">72%</p>
-        </div>
-      </div>
-    </section>
-  );
-}
+const drawerWidth = 288;
 
 export default function Home() {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerX, setDrawerX] = useState(-drawerWidth);
+  const [dragging, setDragging] = useState(false);
+  const touchStartX = useRef<number | null>(null);
+  const startDrawerX = useRef(-drawerWidth);
+
+  const openDrawer = () => {
+    setDrawerOpen(true);
+    setDrawerX(0);
+  };
+
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    setDrawerX(-drawerWidth);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const startX = e.touches[0]?.clientX ?? 0;
+    // 仅在左边缘 24px 内开启侧滑，或者抽屉已打开时可拖动关闭
+    if (!drawerOpen && startX > 24) return;
+    touchStartX.current = startX;
+    startDrawerX.current = drawerX;
+    setDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!dragging || touchStartX.current === null) return;
+    const deltaX = (e.touches[0]?.clientX ?? 0) - touchStartX.current;
+    const nextX = Math.max(-drawerWidth, Math.min(0, startDrawerX.current + deltaX));
+    setDrawerX(nextX);
+  };
+
+  const handleTouchEnd = () => {
+    if (!dragging) return;
+    setDragging(false);
+    touchStartX.current = null;
+    if (drawerX > -drawerWidth * 0.55) openDrawer();
+    else closeDrawer();
+  };
+
+  const overlayOpacity = Math.max(0, Math.min(0.45, ((drawerX + drawerWidth) / drawerWidth) * 0.45));
+  const drawerVisible = drawerOpen || dragging || drawerX > -drawerWidth;
+
+  const glass = "rounded-2xl border border-white/55 bg-white/78 backdrop-blur-xl shadow-[0_8px_22px_rgba(15,23,42,0.10)]";
+  const glassHover = `${glass} transition-all duration-200 hover:bg-white/86`;
+
   return (
-    <main className="relative min-h-screen overflow-x-hidden text-slate-900">
-      {/* 背景图：放在 public/images/home-bg.jpg */}
+    <main
+      className="relative min-h-screen overflow-x-hidden text-slate-900"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* 背景图：确保存在 public/images/home-bg.jpg */}
       <div
-        className="fixed inset-0 -z-20 bg-cover bg-center saturate-110"
+        className="fixed inset-0 -z-20 bg-cover bg-center"
         style={{ backgroundImage: "url('/images/home-bg.jpg')" }}
       />
-      {/* 暗部，保留清晰度 */}
-      <div className="fixed inset-0 -z-10 bg-black/10" />
-      {/* 氛围光 */}
+      {/* 背景遮罩：不再过度发白 */}
+      <div className="fixed inset-0 -z-10 bg-black/18" />
       <div
         className="fixed inset-0 -z-10"
         style={{
           background:
-            "radial-gradient(circle at 20% 15%, rgba(255,255,255,0.36), transparent 38%), radial-gradient(circle at 85% 0%, rgba(59,130,246,0.24), transparent 35%), radial-gradient(circle at 50% 100%, rgba(56,189,248,0.18), transparent 40%)",
+            "radial-gradient(circle at 16% 12%, rgba(255,255,255,0.22), transparent 35%), radial-gradient(circle at 90% 0%, rgba(56,189,248,0.16), transparent 28%)",
         }}
       />
 
+      {/* Telegram 风格侧边栏 */}
+      <div className={`fixed inset-0 z-40 ${drawerVisible ? "" : "pointer-events-none"}`}>
+        <div
+          className="absolute inset-0 bg-black transition-opacity duration-200"
+          style={{ opacity: overlayOpacity }}
+          onClick={closeDrawer}
+        />
+        <aside
+          className={`absolute inset-y-0 left-0 w-72 border-r border-white/40 bg-white/92 backdrop-blur-2xl shadow-2xl ${
+            dragging ? "" : "transition-transform duration-300 ease-out"
+          }`}
+          style={{ transform: `translateX(${drawerX}px)` }}
+        >
+          <div className="p-5">
+            <p className="text-sm font-semibold text-slate-500">菜单</p>
+            <h2 className="mt-1 text-xl font-black text-slate-800">中缅文学习中心</h2>
+          </div>
+          <nav className="space-y-1 px-3">
+            <Link href="/" className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
+              首页
+            </Link>
+            <Link href="/course/hsk1" className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
+              HSK 课程
+            </Link>
+            <Link href="/library" className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
+              免费书籍
+            </Link>
+            <Link href="/settings" className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
+              设置
+            </Link>
+          </nav>
+        </aside>
+      </div>
+
       <div className="relative z-10 mx-auto w-full max-w-lg px-4 pb-28 pt-3">
-        <TopPanel />
-        <HeroStrip />
+        {/* 顶部简洁栏：三条杠无背景框 */}
+        <header className="mb-4 flex items-center gap-3 text-white drop-shadow">
+          <button type="button" aria-label="打开菜单" onClick={openDrawer} className="p-0.5">
+            <Menu className="h-7 w-7" />
+          </button>
+          <div>
+            <h1 className="text-[18px] font-black leading-none">中缅文学习中心</h1>
+            <p className="mt-1 text-[11px] text-white/85">Chinese Learning Hub</p>
+          </div>
+        </header>
 
         <section className="grid grid-cols-4 gap-3">
           {pinyinNav.map((item) => (
-            <Link key={item.zh} href={item.href} className={`${glassCardHover} px-1 py-4`}>
+            <Link key={item.zh} href={item.href} className={`${glassHover} px-1 py-4`}>
               <div className="flex flex-col items-center gap-2">
                 <div className={`flex h-8 w-8 items-center justify-center rounded-full ${item.bg}`}>
                   <item.icon className={`h-4 w-4 ${item.iconColor}`} />
@@ -182,9 +210,9 @@ export default function Home() {
         </section>
 
         <section className="mt-4">
-          <Link href="/tips" className={`${glassCardHover} flex items-center justify-between px-4 py-3`}>
+          <Link href="/tips" className={`${glassHover} flex items-center justify-between px-4 py-3`}>
             <div className="flex items-center gap-3">
-              <div className="rounded-full bg-orange-100/85 p-1.5">
+              <div className="rounded-full bg-orange-100 p-1.5">
                 <Lightbulb className="h-4 w-4 text-orange-500" />
               </div>
               <div>
@@ -198,7 +226,7 @@ export default function Home() {
 
         <section className="mt-4 grid grid-cols-2 gap-3">
           {coreTools.map((tool) => (
-            <Link key={tool.zh} href={tool.href} className={`${glassCardHover} flex items-center gap-3 p-3.5`}>
+            <Link key={tool.zh} href={tool.href} className={`${glassHover} flex items-center gap-3 p-3.5`}>
               <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${tool.bg}`}>
                 <tool.icon className={`h-4 w-4 ${tool.iconColor}`} />
               </div>
@@ -215,21 +243,15 @@ export default function Home() {
             <BookText className="h-4 w-4 text-slate-700" />
             <h2 className="text-[13px] font-bold tracking-wider text-slate-700">SYSTEM COURSES (သင်ရိုး)</h2>
           </div>
-
           <div className="flex flex-col gap-4">
             {systemCourses.map((course) => (
-              <Link
-                key={course.title}
-                href={course.href}
-                className="group relative block overflow-hidden rounded-3xl border border-white/40 shadow-[0_18px_40px_rgba(2,6,23,0.25)]"
-              >
+              <Link key={course.title} href={course.href} className="group relative block overflow-hidden rounded-3xl border border-white/45 shadow-[0_12px_30px_rgba(2,6,23,0.2)]">
                 <div className="absolute inset-0 bg-slate-800" />
                 <div
                   className="absolute inset-0 bg-cover bg-center opacity-85 transition-transform duration-700 group-hover:scale-105"
                   style={{ backgroundImage: `url(${course.bgImg})` }}
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent" />
-                <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white/15 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/88 via-black/40 to-transparent" />
                 <div className="relative flex min-h-[170px] flex-col justify-between p-4">
                   <span className="w-fit rounded-full bg-white/95 px-3 py-1 text-[11px] font-black text-slate-800">
                     {course.badge}
@@ -247,26 +269,27 @@ export default function Home() {
         </section>
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-40 mx-auto flex h-14 w-full max-w-lg items-center justify-between border-t border-white/40 bg-white/70 px-1 backdrop-blur-xl sm:hidden">
-        <a href="https://bbs.886.best/user/mei/chats" className="flex flex-1 flex-col items-center justify-center text-slate-600 transition-colors hover:text-slate-800">
+      {/* 底部导航：磨砂玻璃，不再透明漂浮 */}
+      <nav className="fixed bottom-0 left-0 right-0 z-30 mx-auto flex h-14 w-full max-w-lg items-center justify-between border-t border-white/70 bg-white/90 px-1 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] backdrop-blur-xl sm:hidden">
+        <a href="https://bbs.886.best/user/mei/chats" className="flex flex-1 flex-col items-center justify-center text-slate-600">
           <MessageCircle className="h-5 w-5" />
           <span className="mt-0.5 text-[10px] font-semibold">消息</span>
         </a>
-        <a href="https://bbs.886.best" className="flex flex-1 flex-col items-center justify-center text-slate-600 transition-colors hover:text-slate-800">
-          <BookOpen className="h-5 w-5" />
+        <a href="https://bbs.886.best" className="flex flex-1 flex-col items-center justify-center text-slate-600">
+          <Globe2 className="h-5 w-5" />
           <span className="mt-0.5 text-[10px] font-semibold">社区</span>
         </a>
-        <a href="https://bbs.886.best/partners" className="flex flex-1 flex-col items-center justify-center text-slate-600 transition-colors hover:text-slate-800">
+        <a href="https://bbs.886.best/partners" className="flex flex-1 flex-col items-center justify-center text-slate-600">
           <Users className="h-5 w-5" />
           <span className="mt-0.5 text-[10px] font-semibold">语伴</span>
         </a>
-        <a href="https://bbs.886.best/category/5/%E5%8A%A8%E6%80%81" className="flex flex-1 flex-col items-center justify-center text-slate-600 transition-colors hover:text-slate-800">
+        <a href="https://bbs.886.best/category/5/%E5%8A%A8%E6%80%81" className="flex flex-1 flex-col items-center justify-center text-slate-600">
           <Compass className="h-5 w-5" />
           <span className="mt-0.5 text-[10px] font-semibold">动态</span>
         </a>
         <Link href="/" className="relative flex flex-1 flex-col items-center justify-center text-indigo-600">
           <span className="absolute top-0 h-0.5 w-8 rounded-full bg-indigo-500" />
-          <BookText className="h-5 w-5" />
+          <BookOpen className="h-5 w-5" />
           <span className="mt-0.5 text-[10px] font-semibold">学习</span>
         </Link>
       </nav>
