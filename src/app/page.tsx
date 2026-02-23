@@ -1,3 +1,4 @@
+import type { ComponentType } from "react";
 import Link from "next/link";
 import {
   Bell,
@@ -25,7 +26,7 @@ type NavItem = {
   zh: string;
   mm: string;
   href: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: ComponentType<{ className?: string }>;
   iconColor: string;
   bg: string;
 };
@@ -101,9 +102,11 @@ export default async function Home() {
   return (
     <HydrateClient>
       <main className="relative min-h-screen overflow-x-hidden text-slate-900">
-        {/* 大背景图 */}
-        <div className="fixed inset-0 -z-20 bg-[url('/images/home-bg.jpg')] bg-cover bg-center" />
-        {/* 玻璃遮罩 */}
+        {/* 大背景图：放在 public/images/home-bg.jpg */}
+        <div
+          className="fixed inset-0 -z-20 bg-cover bg-center"
+          style={{ backgroundImage: "url('/images/home-bg.jpg')" }}
+        />
         <div className="fixed inset-0 -z-10 bg-slate-100/55 backdrop-blur-[8px]" />
 
         <div className="relative z-10 mx-auto w-full max-w-lg px-4 pb-28 pt-3">
@@ -190,23 +193,27 @@ export default async function Home() {
           </section>
         </div>
 
-        {/* 底部导航 */}
         <nav className="fixed bottom-0 left-0 right-0 z-40 mx-auto flex h-14 w-full max-w-lg items-center justify-between border-t border-black/5 bg-white/95 px-1 backdrop-blur-xl sm:hidden">
-          <a href="https://bbs.886.best/user/mei/chats" className="flex flex-1 flex-col items-center text-slate-500">
-            <MessageCircle className="h-5 w-5" /><span className="mt-0.5 text-[10px] font-semibold">消息</span>
-          </a>
-          <a href="https://bbs.886.best" className="flex flex-1 flex-col items-center text-slate-500">
-            <BookOpen className="h-5 w-5" /><span className="mt-0.5 text-[10px] font-semibold">社区</span>
-          </a>
-          <a href="https://bbs.886.best/partners" className="flex flex-1 flex-col items-center text-slate-500">
-            <Users className="h-5 w-5" /><span className="mt-0.5 text-[10px] font-semibold">语伴</span>
-          </a>
-          <a href="https://bbs.886.best/category/5/%E5%8A%A8%E6%80%81" className="flex flex-1 flex-col items-center text-slate-500">
-            <Compass className="h-5 w-5" /><span className="mt-0.5 text-[10px] font-semibold">动态</span>
-          </a>
-          <a href="/" className="flex flex-1 flex-col items-center text-indigo-600">
-            <BookText className="h-5 w-5" /><span className="mt-0.5 text-[10px] font-semibold">学习</span>
-          </a>
+          <Link href="https://bbs.886.best/user/mei/chats" className="flex flex-1 flex-col items-center text-slate-500">
+            <MessageCircle className="h-5 w-5" />
+            <span className="mt-0.5 text-[10px] font-semibold">消息</span>
+          </Link>
+          <Link href="https://bbs.886.best" className="flex flex-1 flex-col items-center text-slate-500">
+            <BookOpen className="h-5 w-5" />
+            <span className="mt-0.5 text-[10px] font-semibold">社区</span>
+          </Link>
+          <Link href="https://bbs.886.best/partners" className="flex flex-1 flex-col items-center text-slate-500">
+            <Users className="h-5 w-5" />
+            <span className="mt-0.5 text-[10px] font-semibold">语伴</span>
+          </Link>
+          <Link href="https://bbs.886.best/category/5/%E5%8A%A8%E6%80%81" className="flex flex-1 flex-col items-center text-slate-500">
+            <Compass className="h-5 w-5" />
+            <span className="mt-0.5 text-[10px] font-semibold">动态</span>
+          </Link>
+          <Link href="/" className="flex flex-1 flex-col items-center text-indigo-600">
+            <BookText className="h-5 w-5" />
+            <span className="mt-0.5 text-[10px] font-semibold">学习</span>
+          </Link>
         </nav>
       </main>
     </HydrateClient>
