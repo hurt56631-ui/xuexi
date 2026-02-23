@@ -697,11 +697,15 @@ export default function PremiumReader({ url, title, onClose, bookId }: PremiumRe
               className="absolute top-0 right-0 bottom-0 z-[200] flex w-[85vw] max-w-sm flex-col bg-white shadow-2xl"
             >
               <div className="flex h-14 items-center justify-between border-b bg-slate-50 px-4">
-                <span className="text-xs font-bold uppercase text-slate-500">Table of Contents</span>
-                <button onClick={() => setSidebar text-slate-400">
-                  <X size={20} />
-                </button>
-              </div>
+  <span className="text-xs font-bold uppercase text-slate-500">Table of Contents</span>
+  <button
+    onClick={() => setSidebarOpen(false)}
+    aria-label="Close"
+    className="p-1 text-slate-400"
+  >
+    <X size={20} />
+  </button>
+</div>
 
               <div className="flex-1 overflow-y-auto bg-white p-3">
                 <div className="space-y-1">
