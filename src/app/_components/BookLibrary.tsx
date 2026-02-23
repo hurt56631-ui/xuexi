@@ -58,8 +58,14 @@ const ThreeDBook = ({ cover, title, onClick, disabled = false }: ThreeDBookProps
       style={{ perspective: "1200px" }}
       aria-label={title}
     >
-      <div className="absolute -bottom-4 left-2 right-4 h-4 rounded-full blur-xl" style={{ background: "rgba(15,23,42,0.42)" }} />
-      <div className="absolute inset-0" style={{ transformStyle: "preserve-3d", transform: "rotateY(-14deg) rotateX(2deg)" }}>
+      <div
+        className="absolute -bottom-4 left-2 right-4 h-4 rounded-full blur-xl"
+        style={{ background: "rgba(15,23,42,0.42)" }}
+      />
+      <div
+        className="absolute inset-0"
+        style={{ transformStyle: "preserve-3d", transform: "rotateY(-14deg) rotateX(2deg)" }}
+      >
         <div
           className="absolute inset-0 overflow-hidden rounded-r-md rounded-l-[2px]"
           style={{
