@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentType } from "react";
+import type { ComponentType, TouchEvent } from "react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import {
@@ -21,6 +21,7 @@ import {
   Star,
   Users,
   Volume2,
+  X,
 } from "lucide-react";
 
 type NavItem = {
@@ -76,13 +77,20 @@ const systemCourses = [
   },
 ];
 
+const sidebarLinks = [
+  { label: "首页", href: "/" },
+  { label: "HSK 课程", href: "/course/hsk1" },
+  { label: "免费书籍", href: "/library" },
+  { label: "设置", href: "/settings" },
+];
+
 const drawerWidth = 288;
 
 export default function Home() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerX, setDrawerX] = useState(-drawerWidth);
   const [dragging, setDragging] = useState(false);
-  const touchStartX = useRef<number | null>(null);
+  const touchStartX = useRef(0);
   const startDrawerX = useRef(-drawerWidth);
 
   const openDrawer = () => {
@@ -95,18 +103,18 @@ export default function Home() {
     setDrawerX(-drawerWidth);
   };
 
-  const handleTouchStart = (e: React.TouchEvent) => {
+  const handleTouchStart = (e: TouchEvent<HTMLElement>) => {
     const startX = e.touches[0]?.clientX ?? 0;
-    // 仅在左边缘 24px 内开启侧滑，或者抽屉已打开时可拖动关闭
     if (!drawerOpen && startX > 24) return;
     touchStartX.current = startX;
     startDrawerX.current = drawerX;
     setDragging(true);
   };
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!dragging || touchStartX.current === null) return;
-    const deltaX = (e.touches[0]?.clientX ?? 0) - touchStartX.current;
+  const handleTouchMove = (e: TouchEvent<HTMLElement>) => {
+    if (!dragging) return;
+    const currentX = e.touches[0]?.clientX ?? 0;
+    const deltaX = currentX - touchStartX.current;
     const nextX = Math.max(-drawerWidth, Math.min(0, startDrawerX.current + deltaX));
     setDrawerX(nextX);
   };
@@ -114,16 +122,17 @@ export default function Home() {
   const handleTouchEnd = () => {
     if (!dragging) return;
     setDragging(false);
-    touchStartX.current = null;
     if (drawerX > -drawerWidth * 0.55) openDrawer();
     else closeDrawer();
   };
 
-  const overlayOpacity = Math.max(0, Math.min(0.45, ((drawerX + drawerWidth) / drawerWidth) * 0.45));
   const drawerVisible = drawerOpen || dragging || drawerX > -drawerWidth;
+  const overlayOpacity = Math.max(0, Math.min(0.5, ((drawerX + drawerWidth) / drawerWidth) * 0.5));
 
-  const glass = "rounded-2xl border border-white/55 bg-white/78 backdrop-blur-xl shadow-[0_8px_22px_rgba(15,23,42,0.10)]";
-  const glassHover = `${glass} transition-all duration-200 hover:bg-white/86`;
+  // 厚磨砂（主要在这里）
+  const glassCard =
+    "rounded-2xl border border-white/80 bg-white/94 backdrop-blur-2xl shadow-[0_10px_26px_rgba(15,23,42,0.12)]";
+  const glassCardHover = `${glassCard} transition-all duration-200 hover:bg-white/97`;
 
   return (
     <main
@@ -132,22 +141,25 @@ export default function Home() {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* 背景图：确保存在 public/images/home-bg.jpg */}
+      {/* 背景图：请确认 public/images/home-bg.jpg 存在 */}
       <div
         className="fixed inset-0 -z-20 bg-cover bg-center"
         style={{ backgroundImage: "url('/images/home-bg.jpg')" }}
       />
-      {/* 背景遮罩：不再过度发白 */}
-      <div className="fixed inset-0 -z-10 bg-black/18" />
+      {/* 两层磨皮+虚化膜 */}
+      <div className="fixed inset-0 -z-10 bg-black/26" />
+      <div className="fixed inset-0 -z-10 bg-white/14 backdrop-blur-[12px]" />
+
+      {/* 氛围光 */}
       <div
         className="fixed inset-0 -z-10"
         style={{
           background:
-            "radial-gradient(circle at 16% 12%, rgba(255,255,255,0.22), transparent 35%), radial-gradient(circle at 90% 0%, rgba(56,189,248,0.16), transparent 28%)",
+            "radial-gradient(circle at 18% 8%, rgba(255,255,255,0.18), transparent 34%), radial-gradient(circle at 92% 0%, rgba(59,130,246,0.16), transparent 30%)",
         }}
       />
 
-      {/* Telegram 风格侧边栏 */}
+      {/* 侧边栏 */}
       <div className={`fixed inset-0 z-40 ${drawerVisible ? "" : "pointer-events-none"}`}>
         <div
           className="absolute inset-0 bg-black transition-opacity duration-200"
@@ -155,47 +167,51 @@ export default function Home() {
           onClick={closeDrawer}
         />
         <aside
-          className={`absolute inset-y-0 left-0 w-72 border-r border-white/40 bg-white/92 backdrop-blur-2xl shadow-2xl ${
+          className={`absolute inset-y-0 left-0 w-72 border-r border-white/70 bg-white/96 backdrop-blur-3xl shadow-2xl ${
             dragging ? "" : "transition-transform duration-300 ease-out"
           }`}
           style={{ transform: `translateX(${drawerX}px)` }}
         >
-          <div className="p-5">
-            <p className="text-sm font-semibold text-slate-500">菜单</p>
-            <h2 className="mt-1 text-xl font-black text-slate-800">中缅文学习中心</h2>
+          <div className="flex items-center justify-between p-5">
+            <div>
+              <p className="text-xs font-semibold text-slate-500">菜单</p>
+              <h2 className="mt-1 text-xl font-black text-slate-800">中缅文学习中心</h2>
+            </div>
+            <button
+              type="button"
+              onClick={closeDrawer}
+              aria-label="关闭菜单"
+              className="rounded-lg p-1 text-slate-500 hover:bg-slate-100"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
+
           <nav className="space-y-1 px-3">
-            <Link href="/" className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
-              首页
-            </Link>
-            <Link href="/course/hsk1" className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
-              HSK 课程
-            </Link>
-            <Link href="/library" className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
-              免费书籍
-            </Link>
-            <Link href="/settings" className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
-              设置
-            </Link>
+            {sidebarLinks.map((item) => (
+              <Link key={item.href} href={item.href} className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                {item.label}
+              </Link>
+            ))}
           </nav>
         </aside>
       </div>
 
       <div className="relative z-10 mx-auto w-full max-w-lg px-4 pb-28 pt-3">
         {/* 顶部简洁栏：三条杠无背景框 */}
-        <header className="mb-4 flex items-center gap-3 text-white drop-shadow">
-          <button type="button" aria-label="打开菜单" onClick={openDrawer} className="p-0.5">
+        <header className="mb-4 flex items-center gap-3 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)]">
+          <button type="button" onClick={openDrawer} aria-label="打开菜单" className="p-0.5">
             <Menu className="h-7 w-7" />
           </button>
           <div>
             <h1 className="text-[18px] font-black leading-none">中缅文学习中心</h1>
-            <p className="mt-1 text-[11px] text-white/85">Chinese Learning Hub</p>
+            <p className="mt-1 text-[11px] text-white/90">Chinese Learning Hub</p>
           </div>
         </header>
 
         <section className="grid grid-cols-4 gap-3">
           {pinyinNav.map((item) => (
-            <Link key={item.zh} href={item.href} className={`${glassHover} px-1 py-4`}>
+            <Link key={item.zh} href={item.href} className={`${glassCardHover} px-1 py-4`}>
               <div className="flex flex-col items-center gap-2">
                 <div className={`flex h-8 w-8 items-center justify-center rounded-full ${item.bg}`}>
                   <item.icon className={`h-4 w-4 ${item.iconColor}`} />
@@ -210,7 +226,7 @@ export default function Home() {
         </section>
 
         <section className="mt-4">
-          <Link href="/tips" className={`${glassHover} flex items-center justify-between px-4 py-3`}>
+          <Link href="/tips" className={`${glassCardHover} flex items-center justify-between px-4 py-3`}>
             <div className="flex items-center gap-3">
               <div className="rounded-full bg-orange-100 p-1.5">
                 <Lightbulb className="h-4 w-4 text-orange-500" />
@@ -226,7 +242,7 @@ export default function Home() {
 
         <section className="mt-4 grid grid-cols-2 gap-3">
           {coreTools.map((tool) => (
-            <Link key={tool.zh} href={tool.href} className={`${glassHover} flex items-center gap-3 p-3.5`}>
+            <Link key={tool.zh} href={tool.href} className={`${glassCardHover} flex items-center gap-3 p-3.5`}>
               <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${tool.bg}`}>
                 <tool.icon className={`h-4 w-4 ${tool.iconColor}`} />
               </div>
@@ -243,15 +259,20 @@ export default function Home() {
             <BookText className="h-4 w-4 text-slate-700" />
             <h2 className="text-[13px] font-bold tracking-wider text-slate-700">SYSTEM COURSES (သင်ရိုး)</h2>
           </div>
+
           <div className="flex flex-col gap-4">
             {systemCourses.map((course) => (
-              <Link key={course.title} href={course.href} className="group relative block overflow-hidden rounded-3xl border border-white/45 shadow-[0_12px_30px_rgba(2,6,23,0.2)]">
+              <Link
+                key={course.title}
+                href={course.href}
+                className="group relative block overflow-hidden rounded-3xl border border-white/55 shadow-[0_12px_30px_rgba(2,6,23,0.20)]"
+              >
                 <div className="absolute inset-0 bg-slate-800" />
                 <div
-                  className="absolute inset-0 bg-cover bg-center opacity-85 transition-transform duration-700 group-hover:scale-105"
+                  className="absolute inset-0 bg-cover bg-center opacity-86 transition-transform duration-700 group-hover:scale-105"
                   style={{ backgroundImage: `url(${course.bgImg})` }}
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/88 via-black/40 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/88 via-black/42 to-transparent" />
                 <div className="relative flex min-h-[170px] flex-col justify-between p-4">
                   <span className="w-fit rounded-full bg-white/95 px-3 py-1 text-[11px] font-black text-slate-800">
                     {course.badge}
@@ -269,8 +290,8 @@ export default function Home() {
         </section>
       </div>
 
-      {/* 底部导航：磨砂玻璃，不再透明漂浮 */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 mx-auto flex h-14 w-full max-w-lg items-center justify-between border-t border-white/70 bg-white/90 px-1 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] backdrop-blur-xl sm:hidden">
+      {/* 底部导航：磨砂玻璃，选中高亮无横线 */}
+      <nav className="fixed bottom-0 left-0 right-0 z-30 mx-auto flex h-14 w-full max-w-lg items-center justify-between border-t border-white/80 bg-white/92 px-1 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] backdrop-blur-2xl sm:hidden">
         <a href="https://bbs.886.best/user/mei/chats" className="flex flex-1 flex-col items-center justify-center text-slate-600">
           <MessageCircle className="h-5 w-5" />
           <span className="mt-0.5 text-[10px] font-semibold">消息</span>
@@ -287,9 +308,10 @@ export default function Home() {
           <Compass className="h-5 w-5" />
           <span className="mt-0.5 text-[10px] font-semibold">动态</span>
         </a>
-        <Link href="/" className="relative flex flex-1 flex-col items-center justify-center text-indigo-600">
-          <span className="absolute top-0 h-0.5 w-8 rounded-full bg-indigo-500" />
-          <BookOpen className="h-5 w-5" />
+        <Link href="/" className="flex flex-1 flex-col items-center justify-center text-indigo-600">
+          <div className="rounded-lg bg-indigo-50 p-1">
+            <BookOpen className="h-4.5 w-4.5 h-5 w-5" />
+          </div>
           <span className="mt-0.5 text-[10px] font-semibold">学习</span>
         </Link>
       </nav>
