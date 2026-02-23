@@ -2,6 +2,7 @@
 
 import type { ComponentType, TouchEvent } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRef, useState } from "react";
 import {
   BookOpen,
@@ -24,6 +25,10 @@ import {
   X,
 } from "lucide-react";
 
+const BookLibrary = dynamic(() => import("~/app/_components/BookLibrary"), {
+  ssr: false,
+});
+
 type NavItem = {
   zh: string;
   mm: string;
@@ -33,6 +38,27 @@ type NavItem = {
   bg: string;
 };
 
+type ToolItem = {
+  zh: string;
+  mm: string;
+  icon: ComponentType<{ className?: string }>;
+  iconColor: string;
+  bg: string;
+  href?: string;
+  external?: boolean;
+  action?: "open-library";
+};
+
+type CourseItem = {
+  badge: string;
+  sub: string;
+  title: string;
+  mmDesc: string;
+  zhDesc: string;
+  bgImg: string;
+  href: string;
+};
+
 const pinyinNav: NavItem[] = [
   { zh: "声母", mm: "ဗျည်း", icon: Mic, href: "/pinyin/initials", bg: "bg-blue-100", iconColor: "text-blue-600" },
   { zh: "韵母", mm: "သရ", icon: Music2, href: "/pinyin/finals", bg: "bg-emerald-100", iconColor: "text-emerald-600" },
@@ -40,14 +66,14 @@ const pinyinNav: NavItem[] = [
   { zh: "声调", mm: "အသံ", icon: FileText, href: "/pinyin/tones", bg: "bg-orange-100", iconColor: "text-orange-600" },
 ];
 
-const coreTools: NavItem[] = [
+const coreTools: ToolItem[] = [
   { zh: "AI 翻译", mm: "AI ဘာသာပြန်", icon: Globe, href: "/ai-translate", bg: "bg-indigo-100", iconColor: "text-indigo-600" },
-  { zh: "免费书籍", mm: "စာကြည့်တိုက်", icon: Library, href: "/library", bg: "bg-cyan-100", iconColor: "text-cyan-600" },
+  { zh: "免费书籍", mm: "စာကြည့်တိုက်", icon: Library, action: "open-library", bg: "bg-cyan-100", iconColor: "text-cyan-600" },
   { zh: "单词收藏", mm: "မှတ်ထားသော စာလုံး", icon: Star, href: "/words", bg: "bg-slate-200", iconColor: "text-slate-700" },
   { zh: "口语收藏", mm: "မှတ်ထားသော စကားပြော", icon: Volume2, href: "/oral", bg: "bg-slate-200", iconColor: "text-slate-700" },
 ];
 
-const systemCourses = [
+const systemCourses: CourseItem[] = [
   {
     badge: "Words",
     sub: "词汇 (VOCABULARY)",
@@ -77,7 +103,7 @@ const systemCourses = [
   },
 ];
 
-const sidebarLinks = [
+const drawerLinks = [
   { label: "首页", href: "/" },
   { label: "HSK 课程", href: "/course/hsk1" },
   { label: "免费书籍", href: "/library" },
@@ -87,49 +113,52 @@ const sidebarLinks = [
 const drawerWidth = 288;
 
 export default function Home() {
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [drawerX, setDrawerX] = useState(-drawerWidth);
-  const [dragging, setDragging] = useState(false);
-  const touchStartX = useRef(0);
-  const startDrawerX = useRef(-drawerWidth);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+
+  const touchStartXRef = useRef<number | null>(null);
+  const drawerStartXRef = useRef(-drawerWidth);
 
   const openDrawer = () => {
-    setDrawerOpen(true);
+    setIsDrawerOpen(true);
     setDrawerX(0);
   };
 
   const closeDrawer = () => {
-    setDrawerOpen(false);
+    setIsDrawerOpen(false);
     setDrawerX(-drawerWidth);
   };
 
   const handleTouchStart = (e: TouchEvent<HTMLElement>) => {
     const startX = e.touches[0]?.clientX ?? 0;
-    if (!drawerOpen && startX > 24) return;
-    touchStartX.current = startX;
-    startDrawerX.current = drawerX;
-    setDragging(true);
+    if (!isDrawerOpen && startX > 24) return;
+    touchStartXRef.current = startX;
+    drawerStartXRef.current = drawerX;
+    setIsDragging(true);
   };
 
   const handleTouchMove = (e: TouchEvent<HTMLElement>) => {
-    if (!dragging) return;
+    if (!isDragging || touchStartXRef.current === null) return;
     const currentX = e.touches[0]?.clientX ?? 0;
-    const deltaX = currentX - touchStartX.current;
-    const nextX = Math.max(-drawerWidth, Math.min(0, startDrawerX.current + deltaX));
+    const deltaX = currentX - touchStartXRef.current;
+    const nextX = Math.max(-drawerWidth, Math.min(0, drawerStartXRef.current + deltaX));
     setDrawerX(nextX);
   };
 
   const handleTouchEnd = () => {
-    if (!dragging) return;
-    setDragging(false);
+    if (!isDragging) return;
+    setIsDragging(false);
+    touchStartXRef.current = null;
     if (drawerX > -drawerWidth * 0.55) openDrawer();
     else closeDrawer();
   };
 
-  const drawerVisible = drawerOpen || dragging || drawerX > -drawerWidth;
-  const overlayOpacity = Math.max(0, Math.min(0.5, ((drawerX + drawerWidth) / drawerWidth) * 0.5));
+  const openProgress = (drawerX + drawerWidth) / drawerWidth;
+  const overlayOpacity = Math.max(0, Math.min(0.5, openProgress * 0.5));
+  const showDrawerLayer = isDrawerOpen || isDragging || drawerX > -drawerWidth;
 
-  // 厚磨砂（主要在这里）
   const glassCard =
     "rounded-2xl border border-white/80 bg-white/94 backdrop-blur-2xl shadow-[0_10px_26px_rgba(15,23,42,0.12)]";
   const glassCardHover = `${glassCard} transition-all duration-200 hover:bg-white/97`;
@@ -141,26 +170,26 @@ export default function Home() {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* 背景图：请确认 public/images/home-bg.jpg 存在 */}
-      <div
-        className="fixed inset-0 -z-20 bg-cover bg-center"
-        style={{ backgroundImage: "url('/images/home-bg.jpg')" }}
-      />
-      {/* 两层磨皮+虚化膜 */}
-      <div className="fixed inset-0 -z-10 bg-black/26" />
-      <div className="fixed inset-0 -z-10 bg-white/14 backdrop-blur-[12px]" />
+      {/* 背景磨砂（重点） */}
+      <div className="fixed inset-0 -z-20 overflow-hidden">
+        <div
+          className="absolute inset-[-36px] scale-110 bg-cover bg-center blur-[16px]"
+          style={{ backgroundImage: "url('/images/home-bg.jpg')" }}
+        />
+        <div className="absolute inset-0 bg-slate-900/30" />
+        <div className="absolute inset-0 bg-white/10" />
+      </div>
 
-      {/* 氛围光 */}
       <div
         className="fixed inset-0 -z-10"
         style={{
           background:
-            "radial-gradient(circle at 18% 8%, rgba(255,255,255,0.18), transparent 34%), radial-gradient(circle at 92% 0%, rgba(59,130,246,0.16), transparent 30%)",
+            "radial-gradient(circle at 18% 8%, rgba(255,255,255,0.14), transparent 34%), radial-gradient(circle at 92% 0%, rgba(59,130,246,0.12), transparent 30%)",
         }}
       />
 
-      {/* 侧边栏 */}
-      <div className={`fixed inset-0 z-40 ${drawerVisible ? "" : "pointer-events-none"}`}>
+      {/* Telegram 风格侧边栏 */}
+      <div className={`fixed inset-0 z-40 ${showDrawerLayer ? "" : "pointer-events-none"}`}>
         <div
           className="absolute inset-0 bg-black transition-opacity duration-200"
           style={{ opacity: overlayOpacity }}
@@ -168,7 +197,7 @@ export default function Home() {
         />
         <aside
           className={`absolute inset-y-0 left-0 w-72 border-r border-white/70 bg-white/96 backdrop-blur-3xl shadow-2xl ${
-            dragging ? "" : "transition-transform duration-300 ease-out"
+            isDragging ? "" : "transition-transform duration-300 ease-out"
           }`}
           style={{ transform: `translateX(${drawerX}px)` }}
         >
@@ -186,9 +215,8 @@ export default function Home() {
               <X className="h-5 w-5" />
             </button>
           </div>
-
           <nav className="space-y-1 px-3">
-            {sidebarLinks.map((item) => (
+            {drawerLinks.map((item) => (
               <Link key={item.href} href={item.href} className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
                 {item.label}
               </Link>
@@ -197,8 +225,8 @@ export default function Home() {
         </aside>
       </div>
 
-      <div className="relative z-10 mx-auto w-full max-w-lg px-4 pb-28 pt-3">
-        {/* 顶部简洁栏：三条杠无背景框 */}
+      <div className="relative z-10 mx-auto w-full max-w-lg px-4 pb-36 pt-3">
+        {/* 顶部简洁栏 */}
         <header className="mb-4 flex items-center gap-3 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)]">
           <button type="button" onClick={openDrawer} aria-label="打开菜单" className="p-0.5">
             <Menu className="h-7 w-7" />
@@ -241,17 +269,46 @@ export default function Home() {
         </section>
 
         <section className="mt-4 grid grid-cols-2 gap-3">
-          {coreTools.map((tool) => (
-            <Link key={tool.zh} href={tool.href} className={`${glassCardHover} flex items-center gap-3 p-3.5`}>
-              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${tool.bg}`}>
-                <tool.icon className={`h-4 w-4 ${tool.iconColor}`} />
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-[14px] font-bold text-slate-800">{tool.zh}</p>
-                <p className="mt-0.5 truncate text-[10px] text-slate-500">{tool.mm}</p>
-              </div>
-            </Link>
-          ))}
+          {coreTools.map((tool) => {
+            const content = (
+              <>
+                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${tool.bg}`}>
+                  <tool.icon className={`h-4 w-4 ${tool.iconColor}`} />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-[14px] font-bold text-slate-800">{tool.zh}</p>
+                  <p className="mt-0.5 truncate text-[10px] text-slate-500">{tool.mm}</p>
+                </div>
+              </>
+            );
+
+            if (tool.action === "open-library") {
+              return (
+                <button
+                  key={tool.zh}
+                  type="button"
+                  onClick={() => setIsLibraryOpen(true)}
+                  className={`${glassCardHover} flex items-center gap-3 p-3.5 text-left`}
+                >
+                  {content}
+                </button>
+              );
+            }
+
+            if (tool.external && tool.href) {
+              return (
+                <a key={tool.zh} href={tool.href} className={`${glassCardHover} flex items-center gap-3 p-3.5`}>
+                  {content}
+                </a>
+              );
+            }
+
+            return (
+              <Link key={tool.zh} href={tool.href ?? "/"} className={`${glassCardHover} flex items-center gap-3 p-3.5`}>
+                {content}
+              </Link>
+            );
+          })}
         </section>
 
         <section className="mt-8">
@@ -290,31 +347,40 @@ export default function Home() {
         </section>
       </div>
 
-      {/* 底部导航：磨砂玻璃，选中高亮无横线 */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 mx-auto flex h-14 w-full max-w-lg items-center justify-between border-t border-white/80 bg-white/92 px-1 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] backdrop-blur-2xl sm:hidden">
-        <a href="https://bbs.886.best/user/mei/chats" className="flex flex-1 flex-col items-center justify-center text-slate-600">
-          <MessageCircle className="h-5 w-5" />
-          <span className="mt-0.5 text-[10px] font-semibold">消息</span>
-        </a>
-        <a href="https://bbs.886.best" className="flex flex-1 flex-col items-center justify-center text-slate-600">
-          <Globe2 className="h-5 w-5" />
-          <span className="mt-0.5 text-[10px] font-semibold">社区</span>
-        </a>
-        <a href="https://bbs.886.best/partners" className="flex flex-1 flex-col items-center justify-center text-slate-600">
-          <Users className="h-5 w-5" />
-          <span className="mt-0.5 text-[10px] font-semibold">语伴</span>
-        </a>
-        <a href="https://bbs.886.best/category/5/%E5%8A%A8%E6%80%81" className="flex flex-1 flex-col items-center justify-center text-slate-600">
-          <Compass className="h-5 w-5" />
-          <span className="mt-0.5 text-[10px] font-semibold">动态</span>
-        </a>
-        <Link href="/" className="flex flex-1 flex-col items-center justify-center text-indigo-600">
-          <div className="rounded-lg bg-indigo-50 p-1">
-            <BookOpen className="h-4.5 w-4.5 h-5 w-5" />
-          </div>
-          <span className="mt-0.5 text-[10px] font-semibold">学习</span>
-        </Link>
+      {/* 底部导航：不透明 + 更高 + 更大 */}
+      <nav className="fixed bottom-0 left-0 right-0 z-30 mx-auto w-full max-w-lg border-t border-slate-200 bg-white px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+10px)] shadow-[0_-10px_22px_rgba(15,23,42,0.10)] sm:hidden">
+        <div className="flex items-center justify-between">
+          <a href="https://bbs.886.best/user/mei/chats" className="flex flex-1 flex-col items-center justify-center gap-1 text-slate-600">
+            <MessageCircle className="h-6 w-6" />
+            <span className="text-[12px] font-semibold leading-none">消息</span>
+          </a>
+
+          <a href="https://bbs.886.best" className="flex flex-1 flex-col items-center justify-center gap-1 text-slate-600">
+            <Globe2 className="h-6 w-6" />
+            <span className="text-[12px] font-semibold leading-none">社区</span>
+          </a>
+
+          <a href="https://bbs.886.best/partners" className="flex flex-1 flex-col items-center justify-center gap-1 text-slate-600">
+            <Users className="h-6 w-6" />
+            <span className="text-[12px] font-semibold leading-none">语伴</span>
+          </a>
+
+          <a href="https://bbs.886.best/category/5/%E5%8A%A8%E6%80%81" className="flex flex-1 flex-col items-center justify-center gap-1 text-slate-600">
+            <Compass className="h-6 w-6" />
+            <span className="text-[12px] font-semibold leading-none">动态</span>
+          </a>
+
+          <Link href="/" className="flex flex-1 flex-col items-center justify-center gap-1 text-indigo-600">
+            <div className="rounded-lg bg-indigo-100 p-1.5">
+              <BookOpen className="h-6 w-6" />
+            </div>
+            <span className="text-[12px] font-bold leading-none">学习</span>
+          </Link>
+        </div>
       </nav>
+
+      {/* 免费书籍面板 */}
+      <BookLibrary isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} />
     </main>
   );
 }
