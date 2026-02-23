@@ -1,56 +1,123 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, Loader2, ZoomIn, ZoomOut, List, X, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ChevronLeft, Loader2, ZoomIn, ZoomOut, List, X, AlertCircle } from "lucide-react";
 
-const PDF_VERSION = '3.11.174';
+const PDF_VERSION = "3.11.174";
 const CDN_BASE = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDF_VERSION}`;
-const HISTORY_KEY = 'hsk-reader-meta';
+const HISTORY_KEY = "hsk-reader-meta";
 
-let pdfJsLoaderPromise = null;
+type OutlineItem = {
+  title?: string;
+  dest?: unknown;
+  url?: string | null;
+  items?: OutlineItem[];
+};
 
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+type FlatOutlineItem = {
+  title: string;
+  dest: unknown;
+  url: string | null;
+  level: number;
+};
 
-const getMobileFitScale = (screenWidth) => {
+type RenderTask = {
+  promise: Promise<void>;
+  cancel: () => void;
+};
+
+type LoadingTask = {
+  promise: Promise<PdfDocumentProxy>;
+  destroy: () => void;
+};
+
+type PdfViewport = {
+  width: number;
+  height: number;
+};
+
+type PdfPageProxy = {
+  getViewport: (opts: { scale: number }) => PdfViewport;
+  render: (opts: { canvasContext: CanvasRenderingContext2D; viewport: PdfViewport; intent: string }) => RenderTask;
+  getTextContent: () => Promise<unknown>;
+};
+
+type PdfDocumentProxy = {
+  numPages: number;
+  getPage: (pageNum: number) => Promise<PdfPageProxy>;
+  getOutline: () => Promise<OutlineItem[] | null>;
+  getDestination: (dest: string) => Promise<unknown>;
+  getPageIndex: (ref: unknown) => Promise<number>;
+  destroy: () => void;
+};
+
+type PdfJsLib = {
+  GlobalWorkerOptions: { workerSrc: string };
+  getDocument: (opts: Record<string, unknown>) => LoadingTask;
+  renderTextLayer?: (opts: {
+    textContentSource: unknown;
+    container: HTMLElement;
+    viewport: PdfViewport;
+    textDivs: unknown[];
+  }) => { promise?: Promise<void> } | void;
+};
+
+declare global {
+  interface Window {
+    pdfjsLib?: PdfJsLib;
+  }
+}
+
+let pdfJsLoaderPromise: Promise<PdfJsLib> | null = null;
+
+const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+
+const getMobileFitScale = (screenWidth: number): number => {
   const horizontalPadding = 24;
   return clamp((screenWidth - horizontalPadding) / 600, 0.6, 1.2);
 };
 
-const flattenOutlineItems = (items = [], level = 0) =>
+const flattenOutlineItems = (items: OutlineItem[] = [], level = 0): FlatOutlineItem[] =>
   items.flatMap((item) => {
-    const node = {
-      title: item?.title || 'Untitled',
-      dest: item?.dest || null,
-      url: item?.url || null,
-      level
+    const node: FlatOutlineItem = {
+      title: item?.title || "Untitled",
+      dest: item?.dest ?? null,
+      url: item?.url ?? null,
+      level,
     };
     return [node, ...flattenOutlineItems(item?.items || [], level + 1)];
   });
 
-const loadPdfJsFromCDN = () => {
-  if (typeof window === 'undefined') {
-    return Promise.reject(new Error('Window is not available'));
+const loadPdfJsFromCDN = (): Promise<PdfJsLib> => {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Window is not available"));
   }
 
   if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
 
   if (!pdfJsLoaderPromise) {
-    pdfJsLoaderPromise = new Promise((resolve, reject) => {
-      const existing = document.querySelector('script[data-pdfjs="cdn"]');
+    pdfJsLoaderPromise = new Promise<PdfJsLib>((resolve, reject) => {
+      const existing = document.querySelector('script[data-pdfjs="cdn"]') as HTMLScriptElement | null;
       if (existing) {
         if (window.pdfjsLib) return resolve(window.pdfjsLib);
-        existing.addEventListener('load', () => resolve(window.pdfjsLib), { once: true });
-        existing.addEventListener('error', () => reject(new Error('PDF.js load failed')), { once: true });
+        existing.addEventListener("load", () => {
+          if (window.pdfjsLib) resolve(window.pdfjsLib);
+          else reject(new Error("PDF.js loaded but unavailable"));
+        }, { once: true });
+        existing.addEventListener("error", () => reject(new Error("PDF.js load failed")), { once: true });
         return;
       }
 
-      const script = document.createElement('script');
+      const script = document.createElement("script");
       script.src = `${CDN_BASE}/pdf.min.js`;
       script.async = true;
-      script.dataset.pdfjs = 'cdn';
-      script.onload = () => resolve(window.pdfjsLib);
-      script.onerror = () => reject(new Error('PDF.js load failed'));
+      script.dataset.pdfjs = "cdn";
+      script.onload = () => {
+        if (window.pdfjsLib) resolve(window.pdfjsLib);
+        else reject(new Error("PDF.js loaded but unavailable"));
+      };
+      script.onerror = () => reject(new Error("PDF.js load failed"));
       document.head.appendChild(script);
     });
   }
@@ -58,33 +125,40 @@ const loadPdfJsFromCDN = () => {
   return pdfJsLoaderPromise;
 };
 
-const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
-  const canvasRef = useRef(null);
-  const textLayerRef = useRef(null);
-  const containerRef = useRef(null);
-  const renderTaskRef = useRef(null);
-  const [status, setStatus] = useState('init');
+type PDFPageLayerProps = {
+  pdfDoc: PdfDocumentProxy | null;
+  pageNum: number;
+  scale: number;
+  onVisible?: (pageNum: number) => void;
+  shouldRender: boolean;
+};
+
+const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }: PDFPageLayerProps) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const textLayerRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const renderTaskRef = useRef<RenderTask | null>(null);
+  const [status, setStatus] = useState<"init" | "loading" | "rendered" | "error">("init");
 
   const clearLayer = useCallback(() => {
     const canvas = canvasRef.current;
     if (canvas) {
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext("2d");
       if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
       canvas.width = 1;
       canvas.height = 1;
-      canvas.style.width = '1px';
-      canvas.style.height = '1px';
+      canvas.style.width = "1px";
+      canvas.style.height = "1px";
     }
 
-    if (textLayerRef.current) textLayerRef.current.innerHTML = '';
+    if (textLayerRef.current) textLayerRef.current.innerHTML = "";
 
     if (containerRef.current) {
-      containerRef.current.style.width = '100%';
-      containerRef.current.style.height = '200px';
+      containerRef.current.style.width = "100%";
+      containerRef.current.style.height = "200px";
     }
   }, []);
 
-  // 用中心带判断可见页（比 intersectionRatio 更稳）
   useEffect(() => {
     const element = containerRef.current;
     if (!element || !onVisible) return;
@@ -93,7 +167,7 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
       (entries) => {
         if (entries[0]?.isIntersecting) onVisible(pageNum);
       },
-      { threshold: [0], rootMargin: '-45% 0px -45% 0px' }
+      { threshold: [0], rootMargin: "-45% 0px -45% 0px" }
     );
 
     observer.observe(element);
@@ -109,16 +183,16 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
           if (renderTaskRef.current) {
             try {
               renderTaskRef.current.cancel();
-            } catch (_) {}
+            } catch {}
             renderTaskRef.current = null;
           }
           clearLayer();
-          setStatus('init');
+          setStatus("init");
         }
         return;
       }
 
-      setStatus('loading');
+      setStatus("loading");
 
       try {
         const page = await pdfDoc.getPage(pageNum);
@@ -128,10 +202,10 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
         const canvas = canvasRef.current;
         const textLayer = textLayerRef.current;
         const container = containerRef.current;
-        const context = canvas.getContext('2d', { alpha: false });
+        const context = canvas.getContext("2d", { alpha: false });
 
         if (!context) {
-          setStatus('error');
+          setStatus("error");
           return;
         }
 
@@ -156,10 +230,10 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
         if (renderTaskRef.current) {
           try {
             renderTaskRef.current.cancel();
-          } catch (_) {}
+          } catch {}
         }
 
-        const task = page.render({ canvasContext: context, viewport, intent: 'display' });
+        const task = page.render({ canvasContext: context, viewport, intent: "display" });
         renderTaskRef.current = task;
         await task.promise;
         if (cancelled) return;
@@ -168,20 +242,23 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
           const textContent = await page.getTextContent();
           if (cancelled) return;
 
-          textLayer.innerHTML = '';
+          textLayer.innerHTML = "";
           const textTask = window.pdfjsLib.renderTextLayer({
             textContentSource: textContent,
             container: textLayer,
             viewport,
-            textDivs: []
+            textDivs: [],
           });
 
-          if (textTask?.promise) await textTask.promise;
+          if (textTask && "promise" in textTask && textTask.promise) {
+            await textTask.promise;
+          }
         }
 
-        setStatus('rendered');
+        setStatus("rendered");
       } catch (err) {
-        if (!cancelled && err?.name !== 'RenderingCancelledException') setStatus('error');
+        const name = (err as { name?: string })?.name;
+        if (!cancelled && name !== "RenderingCancelledException") setStatus("error");
       }
     };
 
@@ -192,7 +269,7 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
       if (renderTaskRef.current) {
         try {
           renderTaskRef.current.cancel();
-        } catch (_) {}
+        } catch {}
         renderTaskRef.current = null;
       }
     };
@@ -203,7 +280,7 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
       if (renderTaskRef.current) {
         try {
           renderTaskRef.current.cancel();
-        } catch (_) {}
+        } catch {}
       }
       clearLayer();
     };
@@ -213,13 +290,13 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
     <div
       ref={containerRef}
       id={`page-container-${pageNum}`}
-      className="relative bg-white shadow-sm mb-3 mx-auto transition-all"
-      style={{ minHeight: '200px' }}
+      className="relative mx-auto mb-3 bg-white shadow-sm transition-all"
+      style={{ minHeight: "200px" }}
     >
       {shouldRender ? (
         <>
-          {status !== 'rendered' && (
-            <div className="absolute inset-0 flex items-center justify-center bg-slate-50 text-slate-300 z-10">
+          {status !== "rendered" && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50 text-slate-300">
               <Loader2 className="animate-spin" size={22} />
             </div>
           )}
@@ -227,7 +304,7 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
           <div ref={textLayerRef} className="textLayer absolute inset-0" />
         </>
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-50/50 text-slate-200 text-[10px]">
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-50/50 text-[10px] text-slate-200">
           {pageNum}
         </div>
       )}
@@ -235,37 +312,44 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
   );
 };
 
-export default function PremiumReader({ url, title, onClose, bookId }) {
-  const [pdfDoc, setPdfDoc] = useState(null);
+type PremiumReaderProps = {
+  url: string;
+  title: string;
+  onClose: () => void;
+  bookId?: string;
+};
+
+export default function PremiumReader({ url, title, onClose, bookId }: PremiumReaderProps) {
+  const [pdfDoc, setPdfDoc] = useState<PdfDocumentProxy | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [numPages, setNumPages] = useState(0);
   const [scale, setScale] = useState(1);
   const [isMobile, setIsMobile] = useState(false);
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [outline, setOutline] = useState([]);
-  const [jumpTargetPage, setJumpTargetPage] = useState(null);
+  const [outline, setOutline] = useState<FlatOutlineItem[]>([]);
+  const [jumpTargetPage, setJumpTargetPage] = useState<number | null>(null);
 
-  const loadingTaskRef = useRef(null);
-  const pdfDocRef = useRef(null);
-  const restoreTimerRef = useRef(null);
+  const loadingTaskRef = useRef<LoadingTask | null>(null);
+  const pdfDocRef = useRef<PdfDocumentProxy | null>(null);
+  const restoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userZoomedRef = useRef(false);
-  const saveTimerRef = useRef(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestProgressRef = useRef({ page: 1, pages: 0 });
 
-  const progressKey = useMemo(() => `pdf_progress_${encodeURIComponent(url || '')}`, [url]);
+  const progressKey = useMemo(() => `pdf_progress_${encodeURIComponent(url || "")}`, [url]);
   const metaKey = useMemo(() => (bookId ? `${HISTORY_KEY}_${bookId}` : null), [bookId]);
 
-  const handlePageVisible = useCallback((visiblePage) => {
+  const handlePageVisible = useCallback((visiblePage: number) => {
     setPageNumber((prev) => (prev === visiblePage ? prev : visiblePage));
   }, []);
 
-  const scrollToPageWithRetry = useCallback((targetPage, smooth = false, retries = 16) => {
+  const scrollToPageWithRetry = useCallback((targetPage: number, smooth = false, retries = 16): boolean => {
     const el = document.getElementById(`page-container-${targetPage}`);
     if (el) {
-      el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
+      el.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
       return true;
     }
 
@@ -276,19 +360,19 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
   }, []);
 
   const persistProgress = useCallback(
-    (page, pages) => {
+    (page: number, pages: number) => {
       if (!url) return;
 
       try {
         localStorage.setItem(progressKey, String(page));
-      } catch (_) {}
+      } catch {}
 
       if (metaKey) {
-        let prev = {};
+        let prev: Record<string, unknown> = {};
         try {
           const raw = localStorage.getItem(metaKey);
-          prev = raw ? JSON.parse(raw) : {};
-        } catch (_) {}
+          prev = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+        } catch {}
 
         try {
           localStorage.setItem(
@@ -296,13 +380,13 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
             JSON.stringify({
               ...prev,
               page,
-              numPages: pages || prev.numPages || 0,
+              numPages: pages || (prev.numPages as number) || 0,
               lastRead: new Date().toISOString(),
               url,
-              title
+              title,
             })
           );
-        } catch (_) {}
+        } catch {}
       }
     },
     [metaKey, progressKey, title, url]
@@ -351,14 +435,14 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
       if (loadingTaskRef.current) {
         try {
           loadingTaskRef.current.destroy();
-        } catch (_) {}
+        } catch {}
         loadingTaskRef.current = null;
       }
 
       if (pdfDocRef.current) {
         try {
           pdfDocRef.current.destroy();
-        } catch (_) {}
+        } catch {}
         pdfDocRef.current = null;
       }
     };
@@ -374,7 +458,7 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
       cleanupPdfObjects();
 
       if (!url) {
-        setError('暂无可用 PDF');
+        setError("暂无可用 PDF");
         setLoading(false);
         return;
       }
@@ -389,13 +473,14 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
       if (metaKey) {
         try {
           const raw = localStorage.getItem(metaKey);
-          const meta = raw ? JSON.parse(raw) : null;
+          const meta = raw ? (JSON.parse(raw) as { page?: number }) : null;
           if (meta?.page && Number.isFinite(meta.page)) savedPage = meta.page;
-        } catch (_) {}
+        } catch {}
       }
 
       if (savedPage === 1) {
-        const legacy = Number.parseInt(localStorage.getItem(progressKey) || '1', 10);
+        const legacyRaw = localStorage.getItem(progressKey) || "1";
+        const legacy = Number.parseInt(legacyRaw, 10);
         if (Number.isFinite(legacy) && legacy > 0) savedPage = legacy;
       }
 
@@ -415,7 +500,7 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
           rangeChunkSize: mobile ? 1024 * 256 : 1024 * 1024,
           disableAutoFetch: mobile,
           disableStream: false,
-          stopAtErrors: false
+          stopAtErrors: false,
         });
 
         loadingTaskRef.current = loadingTask;
@@ -424,7 +509,7 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
         if (cancelled) {
           try {
             doc.destroy();
-          } catch (_) {}
+          } catch {}
           return;
         }
 
@@ -450,7 +535,7 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
       } catch (err) {
         if (!cancelled) {
           console.error(err);
-          setError('加载失败，请检查网络或 PDF 链接');
+          setError("加载失败，请检查网络或 PDF 链接");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -466,24 +551,24 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
     };
 
     init();
-    window.addEventListener('resize', handleResize, { passive: true });
+    window.addEventListener("resize", handleResize, { passive: true });
 
     return () => {
       cancelled = true;
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener("resize", handleResize);
       cleanupPdfObjects();
     };
   }, [url, metaKey, progressKey, scrollToPageWithRetry]);
 
   const jumpToDest = useCallback(
-    async (dest, fallbackUrl) => {
+    async (dest: unknown, fallbackUrl?: string | null) => {
       if (!pdfDoc) return;
 
       try {
         let resolvedDest = dest;
-        let nextPage = null;
+        let nextPage: number | null = null;
 
-        if (typeof resolvedDest === 'string') {
+        if (typeof resolvedDest === "string") {
           resolvedDest = await pdfDoc.getDestination(resolvedDest);
         }
 
@@ -492,8 +577,8 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
           nextPage = idx + 1;
         }
 
-        if (!nextPage && typeof fallbackUrl === 'string' && fallbackUrl.includes('#page=')) {
-          const parsed = Number.parseInt(fallbackUrl.split('#page=')[1], 10);
+        if (!nextPage && typeof fallbackUrl === "string" && fallbackUrl.includes("#page=")) {
+          const parsed = Number.parseInt(fallbackUrl.split("#page=")[1] || "", 10);
           if (Number.isFinite(parsed) && parsed > 0) nextPage = parsed;
         }
 
@@ -504,19 +589,19 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
         setPageNumber(nextPage);
 
         requestAnimationFrame(() => {
-          scrollToPageWithRetry(nextPage, true, 24);
+          scrollToPageWithRetry(nextPage as number, true, 24);
         });
 
         window.setTimeout(() => setJumpTargetPage(null), 4000);
       } catch (err) {
-        console.error('Jump failed:', err);
+        console.error("Jump failed:", err);
       }
     },
     [pdfDoc, scrollToPageWithRetry]
   );
 
   const changeScale = useCallback(
-    (delta) => {
+    (delta: number) => {
       userZoomedRef.current = true;
       const maxScale = isMobile ? 2.5 : 3;
       setScale((prev) => clamp(Number((prev + delta).toFixed(2)), 0.5, maxScale));
@@ -529,18 +614,16 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[300] bg-[#e2e8f0] flex flex-col text-slate-800 font-sans"
+      className="fixed inset-0 z-[300] flex flex-col bg-[#e2e8f0] font-sans text-slate-800"
     >
-      <header className="h-14 flex items-center justify-between px-3 z-30 shrink-0 bg-white/90 border-b shadow-sm">
+      <header className="z-30 flex h-14 shrink-0 items-center justify-between border-b bg-white/90 px-3 shadow-sm">
         <div className="flex items-center gap-1 overflow-hidden">
-          <button onClick={onClose} aria-label="Back" className="p-2 -ml-1 text-slate-600">
+          <button onClick={onClose} aria-label="Back" className="-ml-1 p-2 text-slate-600">
             <ChevronLeft size={24} />
           </button>
           <div className="flex flex-col overflow-hidden">
-            <h1 className="text-xs font-bold truncate max-w-[190px] sm:max-w-[260px]">{title}</h1>
-            <span className="text-[10px] text-slate-400">
-              {pdfDoc ? `${pageNumber} / ${numPages}` : 'Loading...'}
-            </span>
+            <h1 className="max-w-[190px] truncate text-xs font-bold sm:max-w-[260px]">{title}</h1>
+            <span className="text-[10px] text-slate-400">{pdfDoc ? `${pageNumber} / ${numPages}` : "Loading..."}</span>
           </div>
         </div>
 
@@ -549,7 +632,7 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
         </button>
       </header>
 
-      <div className="flex-1 overflow-hidden relative flex flex-row bg-slate-200/50">
+      <div className="relative flex flex-1 flex-row overflow-hidden bg-slate-200/50">
         {loading && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/65">
             <Loader2 className="animate-spin text-blue-500" size={30} />
@@ -557,14 +640,14 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
         )}
 
         {error && (
-          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center text-red-500 gap-2">
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-2 text-red-500">
             <AlertCircle size={40} />
             <span className="text-xs">{error}</span>
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-2 sm:px-8 py-3 scroll-smooth" style={{ WebkitOverflowScrolling: 'touch' }}>
-          <div className="max-w-fit min-h-full mx-auto pb-20 flex flex-col items-center">
+        <div className="flex-1 overflow-y-auto scroll-smooth px-2 py-3 sm:px-8" style={{ WebkitOverflowScrolling: "touch" }}>
+          <div className="mx-auto flex min-h-full max-w-fit flex-col items-center pb-20">
             {pdfDoc &&
               Array.from({ length: numPages }, (_, i) => {
                 const n = i + 1;
@@ -585,12 +668,12 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
           </div>
         </div>
 
-        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 bg-white/95 shadow-xl rounded-full px-4 py-2.5 flex items-center gap-3 z-20 border border-white/70">
-          <button onClick={() => changeScale(-0.15)} aria-label="Zoom out" className="h-8 w-8 grid place-items-center rounded-full">
+        <div className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-full border border-white/70 bg-white/95 px-4 py-2.5 shadow-xl">
+          <button onClick={() => changeScale(-0.15)} aria-label="Zoom out" className="grid h-8 w-8 place-items-center rounded-full">
             <ZoomOut size={18} className="text-slate-600" />
           </button>
-          <span className="text-xs font-black min-w-[40px] text-center">{Math.round(scale * 100)}%</span>
-          <button onClick={() => changeScale(0.15)} aria-label="Zoom in" className="h-8 w-8 grid place-items-center rounded-full">
+          <span className="min-w-[40px] text-center text-xs font-black">{Math.round(scale * 100)}%</span>
+          <button onClick={() => changeScale(0.15)} aria-label="Zoom in" className="grid h-8 w-8 place-items-center rounded-full">
             <ZoomIn size={18} className="text-slate-600" />
           </button>
         </div>
@@ -604,30 +687,30 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setSidebarOpen(false)}
-              className="fixed inset-0 bg-black/30 z-[150]"
+              className="fixed inset-0 z-[150] bg-black/30"
             />
             <motion.aside
-              initial={{ x: '100%' }}
+              initial={{ x: "100%" }}
               animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="absolute right-0 top-0 bottom-0 w-[85vw] max-w-sm bg-white shadow-2xl z-[200] flex flex-col"
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 220 }}
+              className="absolute top-0 right-0 bottom-0 z-[200] flex w-[85vw] max-w-sm flex-col bg-white shadow-2xl"
             >
-              <div className="h-14 border-b flex items-center justify-between px-4 bg-slate-50">
+              <div className="flex h-14 items-center justify-between border-b bg-slate-50 px-4">
                 <span className="text-xs font-bold uppercase text-slate-500">Table of Contents</span>
-                <button onClick={() => setSidebarOpen(false)} aria-label="Close" className="p-1 text-slate-400">
+                <button onClick={() => setSidebar text-slate-400">
                   <X size={20} />
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-3 bg-white">
+              <div className="flex-1 overflow-y-auto bg-white p-3">
                 <div className="space-y-1">
                   {outline.length > 0 ? (
                     outline.map((item, i) => (
                       <button
                         key={`${item.title}-${i}-${item.level}`}
                         onClick={() => jumpToDest(item.dest, item.url)}
-                        className="w-full text-left py-2.5 px-2 hover:bg-slate-50 border-b border-slate-50 text-xs text-slate-600 truncate"
+                        className="w-full truncate border-b border-slate-50 px-2 py-2.5 text-left text-xs text-slate-600 hover:bg-slate-50"
                         style={{ paddingLeft: `${8 + item.level * 12}px` }}
                         title={item.title}
                       >
@@ -635,7 +718,7 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
                       </button>
                     ))
                   ) : (
-                    <div className="text-center mt-20 text-slate-300 text-xs">暂无目录</div>
+                    <div className="mt-20 text-center text-xs text-slate-300">暂无目录</div>
                   )}
                 </div>
               </div>
